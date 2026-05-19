@@ -31,6 +31,7 @@ const tabs: {
     icon: "mdi-account-group-outline",
   },
   { value: "matchs", title: "Matchs", icon: "mdi-sword-cross" },
+  { value: "affichage", title: "Affichage", icon: "mdi-monitor" },
   { value: "options", title: "Options", icon: "mdi-cog-outline" },
 ];
 </script>

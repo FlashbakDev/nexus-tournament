@@ -2,6 +2,7 @@ export type TournamentDetailTab =
   | "informations"
   | "participants"
   | "matchs"
+  | "affichage"
   | "options";
 
 export function useTournamentLayout() {

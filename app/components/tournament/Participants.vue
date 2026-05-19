@@ -12,7 +12,7 @@ const tournamentId = computed(() => route.params.id as string);
 
 const requestFetch = useRequestFetch();
 
-const { data: participantsData, pending, refresh } = await useAsyncData(
+const { data: participantsData, pending } = await useAsyncData(
   () => `participants-${tournamentId.value}`,
   () =>
     requestFetch<IListResult<ITournamentParticipantEntity>>(
@@ -23,14 +23,30 @@ const { data: participantsData, pending, refresh } = await useAsyncData(
 
 const participants = computed(() => participantsData.value?.results ?? []);
 
-const { addParticipant } = useTournamentActions();
+const {
+  addParticipant,
+  updateParticipant,
+  deleteParticipant,
+  setParticipantIsReady,
+} = useTournamentActions();
 
 const isCreating = ref(false);
+const updatingId = ref<string | null>(null);
+const deletingId = ref<string | null>(null);
+const readyUpdatingId = ref<string | null>(null);
 
 const lastParticipantCreated = useState<ITournamentParticipantEntity | null>(
   `tournament-${tournamentId.value}-participant-created`,
   () => null,
 );
+const lastParticipantUpdated = useState<ITournamentParticipantEntity | null>(
+  `tournament-${tournamentId.value}-participant-updated`,
+  () => null,
+);
+const lastParticipantDeleted = useState<{
+  id: string;
+  tournamentId: string;
+} | null>(`tournament-${tournamentId.value}-participant-deleted`, () => null);
 
 watch(lastParticipantCreated, (participant) => {
   if (!participant) {
@@ -51,6 +67,31 @@ watch(lastParticipantCreated, (participant) => {
   lastParticipantCreated.value = null;
 });
 
+watch(lastParticipantUpdated, (participant) => {
+  if (!participant || !participantsData.value) {
+    return;
+  }
+  participantsData.value = {
+    ...participantsData.value,
+    results: participantsData.value.results.map((p) =>
+      p.id === participant.id ? participant : p,
+    ),
+  };
+  lastParticipantUpdated.value = null;
+});
+
+watch(lastParticipantDeleted, (payload) => {
+  if (!payload || !participantsData.value) {
+    return;
+  }
+  participantsData.value = {
+    ...participantsData.value,
+    results: participantsData.value.results.filter((p) => p.id !== payload.id),
+    total_results: Math.max(0, participantsData.value.total_results - 1),
+  };
+  lastParticipantDeleted.value = null;
+});
+
 const handleAddParticipant = async () => {
   try {
     isCreating.value = true;
@@ -63,6 +104,73 @@ const handleAddParticipant = async () => {
     alert("Erreur lors de l'ajout du participant");
   } finally {
     isCreating.value = false;
+  }
+};
+
+const handleUpdateParticipant = async (
+  participant: ITournamentParticipantEntity,
+) => {
+  const name = window.prompt("Nom du participant", participant.name);
+  if (!name?.trim() || name.trim() === participant.name) {
+    return;
+  }
+
+  try {
+    updatingId.value = participant.id;
+    await updateParticipant({
+      participant: {
+        ...participant,
+        name: name.trim(),
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    alert("Erreur lors de la modification du participant");
+  } finally {
+    updatingId.value = null;
+  }
+};
+
+const handleSetParticipantIsReady = async (
+  participant: ITournamentParticipantEntity,
+  isReady: boolean,
+) => {
+  if (participant.isReady === isReady) {
+    return;
+  }
+
+  try {
+    readyUpdatingId.value = participant.id;
+    await setParticipantIsReady({
+      participant: {
+        id: participant.id,
+        tournamentId: participant.tournamentId,
+      },
+      isReady,
+    });
+  } catch (error) {
+    console.error(error);
+    alert("Erreur lors de la mise à jour du statut");
+  } finally {
+    readyUpdatingId.value = null;
+  }
+};
+
+const handleDeleteParticipant = async (
+  participant: ITournamentParticipantEntity,
+) => {
+  if (!window.confirm(`Supprimer le participant « ${participant.name} » ?`)) {
+    return;
+  }
+
+  try {
+    deletingId.value = participant.id;
+    await deleteParticipant({ participant });
+  } catch (error) {
+    console.error(error);
+    alert("Erreur lors de la suppression du participant");
+  } finally {
+    deletingId.value = null;
   }
 };
 </script>
@@ -104,9 +212,32 @@ TEMPLATE
         class="mb-1"
       >
         <template #prepend>
-          <v-avatar color="primary" variant="tonal" size="40">
-            <v-icon>mdi-account</v-icon>
-          </v-avatar>
+          <v-checkbox
+            :model-value="participant.isReady ?? false"
+            hide-details
+            density="default"
+            :disabled="readyUpdatingId === participant.id"
+            @update:model-value="
+              handleSetParticipantIsReady(participant, $event === true)
+            "
+          />
+        </template>
+        <template #append>
+          <v-btn
+            icon="mdi-pencil"
+            variant="text"
+            size="small"
+            :loading="updatingId === participant.id"
+            @click="handleUpdateParticipant(participant)"
+          />
+          <v-btn
+            icon="mdi-delete"
+            variant="text"
+            size="small"
+            color="error"
+            :loading="deletingId === participant.id"
+            @click="handleDeleteParticipant(participant)"
+          />
         </template>
       </v-list-item>
     </v-list>

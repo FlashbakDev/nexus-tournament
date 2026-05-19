@@ -3,6 +3,7 @@ import { Types, Schema, model, Document } from "mongoose";
 export interface ITournamentParticipantModel extends Document {
   name: string;
   tournamentId: Types.ObjectId;
+  isReady: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -10,6 +11,7 @@ export interface ITournamentParticipantModel extends Document {
 const tournamentParticipantSchema = new Schema<ITournamentParticipantModel>(
   {
     name: { type: String, required: true },
+    isReady: { type: Boolean, required: true, default: false },
     tournamentId: {
       type: Types.ObjectId,
       ref: "Tournament",

@@ -18,9 +18,14 @@ export const getAllQuerySchema = z.object({
 
 export type IGetAllQueryParams = z.infer<typeof getAllQuerySchema>;
 
-export const UpdateTournamentParticipantParamsSchema = z.object({
-  name: z.string().min(1),
-});
+export const UpdateTournamentParticipantParamsSchema = z
+  .object({
+    name: z.string().min(1).optional(),
+    isReady: z.boolean().optional(),
+  })
+  .refine((data) => data.name !== undefined || data.isReady !== undefined, {
+    message: "At least one field must be provided",
+  });
 
 export type IUpdateTournamentParticipantParams = z.infer<
   typeof UpdateTournamentParticipantParamsSchema

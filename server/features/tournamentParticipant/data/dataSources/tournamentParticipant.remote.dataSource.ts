@@ -12,6 +12,7 @@ import {
 const participantSelect = {
   _id: 1,
   name: 1,
+  isReady: 1,
   tournamentId: 1,
   createdAt: 1,
   updatedAt: 1,
@@ -82,10 +83,18 @@ export class TournamentParticipantRemoteDataSource {
     id: string,
     params: IUpdateTournamentParticipantParams,
   ): Promise<ITournamentParticipantModel | null> {
+    const update: Record<string, unknown> = {};
+    if (params.name !== undefined) {
+      update.name = params.name;
+    }
+    if (params.isReady !== undefined) {
+      update.isReady = params.isReady;
+    }
+
     return TournamentParticipantModel.findOneAndUpdate(
       { _id: id, tournamentId },
-      { name: params.name },
-      { new: true },
+      update,
+      { returnDocument: "after" },
     ).select(participantSelect);
   }
 

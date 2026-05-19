@@ -76,7 +76,7 @@ export class TournamentRemoteDataSource {
     return TournamentModel.findByIdAndUpdate(
       id,
       { name: params.name },
-      { new: true },
+      { returnDocument: "after" },
     ).select(tournamentSelect);
   }
 

@@ -8,6 +8,7 @@ export function modelToEntity(
     id: model._id.toString(),
     name: model.name,
     tournamentId: model.tournamentId.toString(),
+    isReady: model.isReady ?? false,
     createdAt: model.createdAt.toISOString(),
     updatedAt: model.updatedAt.toISOString(),
   };

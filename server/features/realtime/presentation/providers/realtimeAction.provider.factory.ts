@@ -2,6 +2,8 @@ import { GetTournamentByIdUseCase } from "~~/server/features/tournament/business
 import { TournamentRemoteDataSource } from "~~/server/features/tournament/data/dataSources/tournament.remote.dataSource";
 import { TournamentRepositoryImpl } from "~~/server/features/tournament/data/repositories/tournament.repositoryImpl";
 import { CreateTournamentParticipantUseCase } from "~~/server/features/tournamentParticipant/business/useCases/createTournamentParticipant.useCase";
+import { DeleteTournamentParticipantUseCase } from "~~/server/features/tournamentParticipant/business/useCases/deleteTournamentParticipant.useCase";
+import { UpdateTournamentParticipantUseCase } from "~~/server/features/tournamentParticipant/business/useCases/updateTournamentParticipant.useCase";
 import { TournamentParticipantRemoteDataSource } from "~~/server/features/tournamentParticipant/data/dataSources/tournamentParticipant.remote.dataSource";
 import { TournamentParticipantRepositoryImpl } from "~~/server/features/tournamentParticipant/data/repositories/tournamentParticipant.repositoryImpl";
 import { RealtimeActionProvider } from "./realtimeAction.provider";
@@ -19,6 +21,8 @@ export async function getRealtimeActionProviderInstance(): Promise<RealtimeActio
 
     realtimeActionProviderInstance = new RealtimeActionProvider(
       new CreateTournamentParticipantUseCase(participantRepository),
+      new UpdateTournamentParticipantUseCase(participantRepository),
+      new DeleteTournamentParticipantUseCase(participantRepository),
       new GetTournamentByIdUseCase(tournamentRepository),
     );
   }

@@ -18,6 +18,14 @@ const lastParticipantCreated = useState<ITournamentParticipantEntity | null>(
   `tournament-${id}-participant-created`,
   () => null,
 );
+const lastParticipantUpdated = useState<ITournamentParticipantEntity | null>(
+  `tournament-${id}-participant-updated`,
+  () => null,
+);
+const lastParticipantDeleted = useState<{
+  id: string;
+  tournamentId: string;
+} | null>(`tournament-${id}-participant-deleted`, () => null);
 
 const { activeTab, setTournamentContext, clearTournamentContext } =
   useTournamentLayout();
@@ -41,6 +49,12 @@ useTournamentRoom(computed(() => route.params.id as string), {
   },
   onParticipantCreated: (participant) => {
     lastParticipantCreated.value = participant;
+  },
+  onParticipantUpdated: (participant) => {
+    lastParticipantUpdated.value = participant;
+  },
+  onParticipantDeleted: (payload) => {
+    lastParticipantDeleted.value = payload;
   },
 });
 
@@ -76,7 +90,8 @@ TEMPLATE
       <TournamentInformations v-if="activeTab === 'informations'" />
       <TournamentParticipants v-else-if="activeTab === 'participants'" />
       <TournamentMatchs v-else-if="activeTab === 'matchs'" />
-      <TournamentOptions v-else />
+      <TournamentAffichage v-else-if="activeTab === 'affichage'" />
+      <TournamentOptions v-else-if="activeTab === 'options'" />
     </div>
   </template>
   <NotFound v-else />
