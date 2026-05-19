@@ -5,6 +5,7 @@ SCRIPT
 -->
 <script lang="ts" setup>
 import type { ITournamentEntity } from "~~/server/features/tournament/business/entities/tournament.entity";
+import type { ITournamentParticipantEntity } from "~~/server/features/tournamentParticipant/business/entities/tournamentParticipant.entity";
 
 definePageMeta({
   layout: "tournament",
@@ -12,6 +13,11 @@ definePageMeta({
 
 const route = useRoute();
 const id = route.params.id;
+
+const lastParticipantCreated = useState<ITournamentParticipantEntity | null>(
+  `tournament-${id}-participant-created`,
+  () => null,
+);
 
 const { activeTab, setTournamentContext, clearTournamentContext } =
   useTournamentLayout();
@@ -32,6 +38,9 @@ useTournamentRoom(computed(() => route.params.id as string), {
   },
   onDeleted: () => {
     navigateTo("/tournaments");
+  },
+  onParticipantCreated: (participant) => {
+    lastParticipantCreated.value = participant;
   },
 });
 

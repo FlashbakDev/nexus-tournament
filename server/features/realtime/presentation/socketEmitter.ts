@@ -7,39 +7,44 @@ import {
   type ParticipantDeletedPayload,
   type TournamentDeletedPayload,
 } from "~~/shared/realtime/events";
+import { logSocketEmit } from "./socketLogger";
+
+function emitToRoom(
+  event: string,
+  room: string,
+  payload: unknown,
+): void {
+  logSocketEmit(event, room, payload);
+  getSocketIO().to(room).emit(event, payload);
+}
 
 export function emitTournamentUpdated(tournament: ITournamentEntity): void {
-  getSocketIO()
-    .to(tournamentRoom(tournament.id))
-    .emit(SOCKET_EVENTS.TOURNAMENT_UPDATED, tournament);
+  const room = tournamentRoom(tournament.id);
+  emitToRoom(SOCKET_EVENTS.TOURNAMENT_UPDATED, room, tournament);
 }
 
 export function emitTournamentDeleted(payload: TournamentDeletedPayload): void {
-  getSocketIO()
-    .to(tournamentRoom(payload.id))
-    .emit(SOCKET_EVENTS.TOURNAMENT_DELETED, payload);
+  const room = tournamentRoom(payload.id);
+  emitToRoom(SOCKET_EVENTS.TOURNAMENT_DELETED, room, payload);
 }
 
 export function emitParticipantCreated(
   participant: ITournamentParticipantEntity,
 ): void {
-  getSocketIO()
-    .to(tournamentRoom(participant.tournamentId))
-    .emit(SOCKET_EVENTS.PARTICIPANT_CREATED, participant);
+  const room = tournamentRoom(participant.tournamentId);
+  emitToRoom(SOCKET_EVENTS.PARTICIPANT_CREATED, room, participant);
 }
 
 export function emitParticipantUpdated(
   participant: ITournamentParticipantEntity,
 ): void {
-  getSocketIO()
-    .to(tournamentRoom(participant.tournamentId))
-    .emit(SOCKET_EVENTS.PARTICIPANT_UPDATED, participant);
+  const room = tournamentRoom(participant.tournamentId);
+  emitToRoom(SOCKET_EVENTS.PARTICIPANT_UPDATED, room, participant);
 }
 
 export function emitParticipantDeleted(
   payload: ParticipantDeletedPayload,
 ): void {
-  getSocketIO()
-    .to(tournamentRoom(payload.tournamentId))
-    .emit(SOCKET_EVENTS.PARTICIPANT_DELETED, payload);
+  const room = tournamentRoom(payload.tournamentId);
+  emitToRoom(SOCKET_EVENTS.PARTICIPANT_DELETED, room, payload);
 }

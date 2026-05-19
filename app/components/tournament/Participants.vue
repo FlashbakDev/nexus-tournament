@@ -23,19 +23,41 @@ const { data: participantsData, pending, refresh } = await useAsyncData(
 
 const participants = computed(() => participantsData.value?.results ?? []);
 
+const { addParticipant } = useTournamentActions();
+
 const isCreating = ref(false);
+
+const lastParticipantCreated = useState<ITournamentParticipantEntity | null>(
+  `tournament-${tournamentId.value}-participant-created`,
+  () => null,
+);
+
+watch(lastParticipantCreated, (participant) => {
+  if (!participant) {
+    return;
+  }
+  const current = participantsData.value?.results ?? [];
+  if (current.some((p) => p.id === participant.id)) {
+    lastParticipantCreated.value = null;
+    return;
+  }
+  if (participantsData.value) {
+    participantsData.value = {
+      ...participantsData.value,
+      results: [...current, participant],
+      total_results: participantsData.value.total_results + 1,
+    };
+  }
+  lastParticipantCreated.value = null;
+});
 
 const handleAddParticipant = async () => {
   try {
     isCreating.value = true;
-    await $fetch(
-      `/api/v1/tournaments/${tournamentId.value}/participants`,
-      {
-        method: "POST",
-        body: { name: "Nouveau participant" },
-      },
-    );
-    await refresh();
+    await addParticipant({
+      tournamentId: tournamentId.value,
+      name: "Nouveau participant",
+    });
   } catch (error) {
     console.error(error);
     alert("Erreur lors de l'ajout du participant");
