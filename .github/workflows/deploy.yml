@@ -111,7 +111,6 @@ jobs:
           envs: RELEASE_PATH,ACTIVE_RELEASE_PATH
           script: |
             ln -s -n -f $RELEASE_PATH $ACTIVE_RELEASE_PATH
-            # sudo systemctl restart nexus-tournament
             sudo chown -R www-data:www-data $RELEASE_PATH
             cd /var/www/nexus-tournament
             pm2 reload /var/www/nexus-tournament/ecosystem.config.cjs --update-env
