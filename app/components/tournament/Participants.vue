@@ -110,25 +110,7 @@ const handleAddParticipant = async () => {
 const handleUpdateParticipant = async (
   participant: ITournamentParticipantEntity,
 ) => {
-  const name = window.prompt("Nom du participant", participant.name);
-  if (!name?.trim() || name.trim() === participant.name) {
-    return;
-  }
-
-  try {
     updatingId.value = participant.id;
-    await updateParticipant({
-      participant: {
-        ...participant,
-        name: name.trim(),
-      },
-    });
-  } catch (error) {
-    console.error(error);
-    alert("Erreur lors de la modification du participant");
-  } finally {
-    updatingId.value = null;
-  }
 };
 
 const handleSetParticipantIsReady = async (
@@ -196,6 +178,17 @@ TEMPLATE
   <v-skeleton-loader v-if="pending" type="list-item@4" />
 
   <template v-else>
+
+    <ParticipantFormDrawer
+    v-if="
+      updatingId !== null
+    "
+    :model-value="updatingId !== null"
+    :tournament-id="tournamentId"
+    :participant-id="updatingId"
+    @saved="updatingId = null"
+  />
+
     <v-list v-if="participants.length" lines="two" class="pa-0 bg-transparent">
       <v-list-item
         v-for="participant in participants"
