@@ -6,12 +6,15 @@ import type {
 
 let socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
 
-export function getSocket(): Socket<ServerToClientEvents, ClientToServerEvents> {
+export function getSocket(): Socket<
+  ServerToClientEvents,
+  ClientToServerEvents
+> {
   if (!socket) {
-    const config = useRuntimeConfig();
     socket = io({
       autoConnect: false,
-      path: config.public.socketPath,
+      path: "/socket.io/",
+      transports: ["websocket"],
     });
   }
   return socket;

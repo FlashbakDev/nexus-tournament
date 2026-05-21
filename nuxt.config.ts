@@ -37,7 +37,6 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       authBaseUrl: process.env.NUXT_NEXUS_AUTH_BASE_URL,
-      socketPath: "/socket.io/",
     },
   },
   nitro: {
