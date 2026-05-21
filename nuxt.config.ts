@@ -36,7 +36,7 @@ export default defineNuxtConfig({
   ],
   runtimeConfig: {
     public: {
-      authBaseUrl: process.env.NUXT_NEXUS_AUTH_BASE_URL,
+      authBaseUrl: process.env.NUXT_PUBLIC_AUTH_BASE_URL,
     },
   },
   nitro: {
