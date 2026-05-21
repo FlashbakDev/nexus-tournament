@@ -1,0 +1,247 @@
+name: Deploy to server
+
+on:
+  push:
+    branches: [main] # ou master
+  workflow_dispatch: # déclenchement manuel
+
+permissions:
+  contents: read
+  actions: write
+
+env:
+  NODE_OPTIONS: --max-old-space-size=4096
+  NODE_VERSION: "24"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  test-connection:
+    name: "Test connection"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test server ssh connection
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          port: ${{ secrets.VPS_SSH_PORT }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+
+  create-deployment-artifacts:
+    name: "Create artifacts"
+    needs: [test-connection]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{env.NODE_VERSION}}
+
+      - name: Installer pnpm
+        run: npm install -g pnpm
+
+      - name: Create artifact
+        run: |
+          pnpm install --no-frozen-lockfile
+          pnpm run build
+          tar --no-same-owner -czf "${GITHUB_SHA}".tar.gz .output
+
+      - name: Store artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: app-artifacts
+          path: ${{github.sha}}.tar.gz
+
+  prepare-release-on-servers:
+    name: "Prepare release on production server"
+    needs: [create-deployment-artifacts]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download app artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: app-artifacts
+
+      - name: Upload app-artifacts
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          port: ${{ secrets.VPS_SSH_PORT }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          source: ${{ github.sha }}.tar.gz
+          target: /var/www/nexus-tournament/artifacts
+          timeout: 60s
+
+      - name: Extract archive and create directories
+        uses: appleboy/ssh-action@master
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          port: ${{ secrets.VPS_SSH_PORT }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          envs: GITHUB_SHA
+          script: |
+            mkdir -p "/var/www/nexus-tournament/releases/${GITHUB_SHA}"
+            tar --no-same-owner -xzf /var/www/nexus-tournament/artifacts/${GITHUB_SHA}.tar.gz -C "/var/www/nexus-tournament/releases/${GITHUB_SHA}"
+            rm -rf /var/www/nexus-tournament/artifacts/${GITHUB_SHA}.tar.gz
+
+  activate-release:
+    needs: prepare-release-on-servers
+    name: "Activate release on production server"
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_PATH: /var/www/nexus-tournament/releases/${{ github.sha }}
+      ACTIVE_RELEASE_PATH: /var/www/nexus-tournament/live
+    steps:
+      - name: Activate release
+        uses: appleboy/ssh-action@master
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          port: ${{ secrets.VPS_SSH_PORT }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          envs: RELEASE_PATH,ACTIVE_RELEASE_PATH
+          script: |
+            ln -s -n -f $RELEASE_PATH $ACTIVE_RELEASE_PATH
+            # sudo systemctl restart nexus-tournament
+            sudo chown -R www-data:www-data $RELEASE_PATH
+            cd /var/www/nexus-tournament
+            pm2 reload /var/www/nexus-tournament/ecosystem.config.cjs --update-env
+
+  verify-release:
+    needs: [activate-release]
+    name: "Verify deployed version on PM2"
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_PATH: /var/www/nexus-tournament/releases/${{ github.sha }}
+      ACTIVE_RELEASE_PATH: /var/www/nexus-tournament/live
+      ECOSYSTEM_PATH: /var/www/nexus-tournament/ecosystem.config.cjs
+    steps:
+      - name: Verify live symlink and PM2 exec path
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          port: ${{ secrets.VPS_SSH_PORT }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          envs: RELEASE_PATH,ACTIVE_RELEASE_PATH,ECOSYSTEM_PATH
+          script: |
+            set -euo pipefail
+
+            echo "Expected release: $RELEASE_PATH"
+            echo "Active path: $ACTIVE_RELEASE_PATH"
+
+            LIVE_REALPATH="$(readlink -f "$ACTIVE_RELEASE_PATH")"
+            echo "Live resolves to: $LIVE_REALPATH"
+            test "$LIVE_REALPATH" = "$RELEASE_PATH"
+
+            test -f "$ACTIVE_RELEASE_PATH/.output/server/index.mjs"
+
+            cd /var/www/nexus-tournament
+            APP_NAMES="$(node -p "require(process.env.ECOSYSTEM_PATH).apps.map(a => a.name).join(',')")"
+            echo "Apps in ecosystem: $APP_NAMES"
+
+            node <<'NODE'
+            const { execSync } = require('node:child_process');
+            const path = require('node:path');
+            const fs = require('node:fs');
+
+            const releasePath = process.env.RELEASE_PATH;
+            const activePath = process.env.ACTIVE_RELEASE_PATH;
+            const ecosystemPath = process.env.ECOSYSTEM_PATH;
+
+            const ecosystem = require(ecosystemPath);
+            const appNames = (ecosystem.apps || []).map(a => a.name).filter(Boolean);
+            if (appNames.length === 0) {
+              throw new Error(`No apps found in ${ecosystemPath}`);
+            }
+
+            const jlistRaw = execSync('pm2 jlist', { encoding: 'utf8' });
+            const procs = JSON.parse(jlistRaw);
+
+            const expectedEntry = path.join(releasePath, '.output/server/index.mjs');
+            if (!fs.existsSync(expectedEntry)) {
+              throw new Error(`Expected entry missing: ${expectedEntry}`);
+            }
+
+            for (const name of appNames) {
+              const byName = procs.filter(p => p?.name === name);
+              if (byName.length === 0) {
+                throw new Error(`PM2 has no running process for app name "${name}"`);
+              }
+
+              for (const p of byName) {
+                const execPath = p?.pm2_env?.pm_exec_path;
+                if (!execPath) throw new Error(`Missing pm_exec_path for "${name}"`);
+
+                const resolved = fs.realpathSync(execPath);
+                if (resolved !== expectedEntry) {
+                  throw new Error(
+                    `App "${name}" exec path mismatch:\n` +
+                    `- pm_exec_path: ${execPath}\n` +
+                    `- resolved:    ${resolved}\n` +
+                    `- expected:    ${expectedEntry}\n` +
+                    `- live:        ${activePath}`
+                  );
+                }
+              }
+            }
+
+            console.log('PM2 processes match expected release entrypoint.');
+            NODE
+
+  clean-up:
+    name: "Clean up artifacts and keep 3 most recent releases"
+    needs: prepare-release-on-servers
+    runs-on: ubuntu-latest
+    steps:
+      - name: Activate release
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          port: ${{ secrets.VPS_SSH_PORT }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          envs: RELEASE_PATH,ACTIVE_RELEASE_PATH
+          script: |
+            cd /var/www/nexus-tournament/releases && ls -t | tail -n +4 | xargs -r sudo rm -rf
+            cd /var/www/nexus-tournament/artifacts && rm -rf *
+
+  delete-old-artefacts:
+    needs: prepare-release-on-servers
+    name: "Delete Old Artifacts"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete Old Artifacts
+        uses: actions/github-script@v8
+        with:
+          script: |
+            // Définition de la date limite : il y a une semaine
+            const now = new Date();
+            const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+            // Récupération de la liste des artefacts du dépôt
+            const res = await github.rest.actions.listArtifactsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+
+            // Pour chaque artefact, vérifie sa date de création et le supprime si il a plus d'une semaine
+            for (const artifact of res.data.artifacts) {
+              const createdAt = new Date(artifact.created_at);
+              if (createdAt < oneWeekAgo) {
+                await github.rest.actions.deleteArtifact({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  artifact_id: artifact.id,
+                });
+              }
+            }
